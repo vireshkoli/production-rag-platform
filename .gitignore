@@ -1,0 +1,21 @@
+# Environments & secrets
+.env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Data & runtime artifacts (rebuilt by `python -m rag.ingest`)
+data/
+*.sqlite3
+*.db
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Build
+dist/
+*.egg-info/
