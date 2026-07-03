@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Production RAG Platform</title>
+<style>
+  :root {
+    --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e;
+    --muted: #898781; --line: #e1e0d9; --border: rgba(11,11,11,0.10);
+    --accent: #2a78d6; --good: #006300; --bad: #d03b3b; --warn-bg: #fdf3e0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7;
+      --muted: #898781; --line: #2c2c2a; --border: rgba(255,255,255,0.10);
+      --accent: #3987e5; --good: #0ca30c; --bad: #e66767; --warn-bg: #2a2416;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page); color: var(--ink); line-height: 1.5;
+    max-width: 860px; margin: 0 auto; padding: 24px 16px 64px;
+  }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+  h1 { font-size: 1.25rem; }
+  nav a { color: var(--accent); text-decoration: none; margin-left: 16px; font-size: .9rem; }
+  .sub { color: var(--ink-2); font-size: .9rem; margin-bottom: 20px; }
+  form { display: flex; gap: 8px; flex-wrap: wrap; }
+  input[type=text] {
+    flex: 1 1 320px; padding: 10px 12px; font-size: 1rem; color: var(--ink);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  }
+  button {
+    padding: 10px 18px; font-size: 1rem; border: none; border-radius: 8px;
+    background: var(--accent); color: #fff; cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: wait; }
+  .toggle { display: flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--ink-2); }
+  .examples { margin: 10px 0 0; font-size: .85rem; color: var(--muted); }
+  .examples a { color: var(--accent); text-decoration: none; display: inline-block; margin: 2px 10px 2px 0; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 18px; margin-top: 20px;
+  }
+  .answer { white-space: pre-wrap; }
+  .answer sup a { color: var(--accent); text-decoration: none; font-weight: 600; }
+  .meta { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .meta b { color: var(--ink-2); font-weight: 600; }
+  .blocked { border-left: 4px solid var(--bad); }
+  .abstained { border-left: 4px solid var(--muted); }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; color: var(--ink-2); font-size: .9rem; }
+  .src { border-top: 1px solid var(--line); padding: 10px 0; font-size: .85rem; }
+  .src:first-of-type { border-top: none; }
+  .src .t { font-weight: 600; }
+  .src .t a { color: var(--accent); text-decoration: none; }
+  .src p { color: var(--ink-2); margin-top: 2px; }
+  .spin { color: var(--muted); font-size: .9rem; margin-top: 16px; }
+  .err { color: var(--bad); margin-top: 16px; }
+  .badge { font-size: .7rem; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border); color: var(--ink-2); vertical-align: middle; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Production RAG Platform</h1>
+  <nav><a href="/dashboard">Dashboard</a><a href="/docs">API</a><a href="https://github.com/vireshkoli/production-rag-platform">GitHub</a></nav>
+</header>
+<p class="sub">Ask anything about AI / machine learning. Answers are grounded in 311 Wikipedia
+articles with hybrid retrieval, cross-encoder reranking, and an agentic groundedness
+self-check — every claim is verified against the sources or the system abstains.</p>
+
+<form id="f">
+  <input id="q" type="text" placeholder="e.g. Who coined the term machine learning?" required minlength="3">
+  <button id="go" type="submit">Ask</button>
+  <label class="toggle"><input type="checkbox" id="baseline"> baseline mode (no rerank / self-check)</label>
+</form>
+<div class="examples" id="ex">Try:</div>
+
+<div id="out"></div>
+
+<script>
+const EXAMPLES = [
+  "Who coined the term machine learning and when?",
+  "How does the attention mechanism in transformers work?",
+  "What is the difference between L1 and L2 regularization?",
+  "Why did AlphaGo's move 37 surprise experts?",
+  "What did the 2017 paper 'Attention Is All You Need' introduce?",
+];
+const ex = document.getElementById("ex");
+EXAMPLES.forEach(q => {
+  const a = document.createElement("a");
+  a.href = "#"; a.textContent = q;
+  a.onclick = e => { e.preventDefault(); document.getElementById("q").value = q; document.getElementById("f").requestSubmit(); };
+  ex.appendChild(a);
+});
+
+const esc = s => s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+document.getElementById("f").addEventListener("submit", async e => {
+  e.preventDefault();
+  const q = document.getElementById("q").value.trim();
+  const pipeline = document.getElementById("baseline").checked ? "baseline" : "full";
+  const out = document.getElementById("out");
+  const btn = document.getElementById("go");
+  btn.disabled = true;
+  out.innerHTML = '<p class="spin">Retrieving, generating and self-checking… (a full-pipeline query takes a few seconds)</p>';
+  try {
+    const r = await fetch("/api/query", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({question: q, pipeline}),
+    });
+    if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+    render(await r.json());
+  } catch (err) {
+    out.innerHTML = `<p class="err">Error: ${esc(String(err.message || err))}</p>`;
+  } finally { btn.disabled = false; }
+});
+
+function render(res) {
+  const out = document.getElementById("out");
+  let cls = "card";
+  if (res.blocked) cls += " blocked";
+  else if (res.abstained) cls += " abstained";
+
+  let html = esc(res.answer).replace(/\[(\d{1,2})\]/g, (m, n) => `<sup><a href="#src-${n}">[${n}]</a></sup>`);
+  let meta = `<span><b>${res.pipeline}</b> pipeline</span>`;
+  meta += `<span>latency <b>${(res.timings_ms.total/1000).toFixed(2)}s</b></span>`;
+  meta += `<span>cost <b>$${res.cost_usd.toFixed(4)}</b></span>`;
+  meta += `<span>tokens <b>${res.input_tokens}→${res.output_tokens}</b></span>`;
+  if (res.groundedness !== null && res.groundedness !== undefined)
+    meta += `<span>groundedness <b>${(res.groundedness*100).toFixed(0)}%</b></span>`;
+  if (res.retrieval_rounds > 1) meta += `<span class="badge">re-retrieved (round 2)</span>`;
+  if (res.blocked) meta += `<span class="badge">blocked: ${esc(res.blocked_reason||"")}</span>`;
+
+  let sources = "";
+  if (res.sources && res.sources.length && !res.blocked) {
+    sources = `<details><summary>Sources (${res.sources.length} retrieved chunks)</summary>` +
+      res.sources.map(s =>
+        `<div class="src" id="src-${s.n}"><span class="t">[${s.n}] <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a></span>` +
+        ` <span style="color:var(--muted)">— ${esc(s.section)}</span><p>${esc(s.text.slice(0, 320))}…</p></div>`
+      ).join("") + "</details>";
+  }
+  out.innerHTML = `<div class="${cls}"><div class="answer">${html}</div><div class="meta">${meta}</div>${sources}</div>`;
+}
+</script>
+</body>
+</html>

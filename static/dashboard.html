@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RAG Platform — Live Dashboard</title>
+<style>
+  :root {
+    --page:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781;
+    --line:#e1e0d9; --border:rgba(11,11,11,0.10); --accent:#2a78d6;
+    --s1:#2a78d6; --s2:#1baf7a; --s3:#eda100; --s5:#4a3aa7; --bad:#d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page:#0d0d0d; --surface:#1a1a19; --ink:#fff; --ink-2:#c3c2b7; --muted:#898781;
+      --line:#2c2c2a; --border:rgba(255,255,255,0.10); --accent:#3987e5;
+      --s1:#3987e5; --s2:#199e70; --s3:#c98500; --s5:#9085e9; --bad:#e66767;
+    }
+  }
+  * { box-sizing:border-box; margin:0; }
+  body { font-family:system-ui,-apple-system,"Segoe UI",sans-serif; background:var(--page);
+         color:var(--ink); max-width:1020px; margin:0 auto; padding:24px 16px 64px; line-height:1.5; }
+  header { display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; margin-bottom:4px; }
+  h1 { font-size:1.25rem; }
+  nav a { color:var(--accent); text-decoration:none; margin-left:16px; font-size:.9rem; }
+  .sub { color:var(--ink-2); font-size:.9rem; margin-bottom:20px; }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; }
+  .tile { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
+  .tile .k { font-size:.75rem; color:var(--muted); }
+  .tile .v { font-size:1.5rem; font-weight:650; margin-top:2px; }
+  .tile .u { font-size:.8rem; color:var(--ink-2); font-weight:400; }
+  h2 { font-size:.95rem; margin:26px 0 10px; color:var(--ink-2); font-weight:600; }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; font-size:.75rem; color:var(--ink-2); margin-bottom:8px; }
+  .legend i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:8px 14px; overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:.82rem; }
+  th { text-align:left; color:var(--muted); font-weight:600; padding:8px 10px 6px 0; border-bottom:1px solid var(--line); white-space:nowrap; }
+  td { padding:7px 10px 7px 0; border-bottom:1px solid var(--line); vertical-align:top; font-variant-numeric:tabular-nums; }
+  tr:last-child td { border-bottom:none; }
+  td.q { max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink); }
+  td.num { text-align:right; }  th.num { text-align:right; }
+  .bar { display:flex; height:10px; border-radius:4px; overflow:hidden; background:var(--line); min-width:120px; }
+  .bar span { height:100%; }
+  .bar span + span { border-left:2px solid var(--surface); }
+  .flag { font-size:.7rem; padding:1px 7px; border-radius:99px; border:1px solid var(--border); color:var(--ink-2); white-space:nowrap; }
+  .flag.blocked { color:var(--bad); border-color:var(--bad); }
+  .empty { color:var(--muted); padding:18px 0; text-align:center; }
+  .foot { color:var(--muted); font-size:.75rem; margin-top:14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Live cost &amp; latency dashboard</h1>
+  <nav><a href="/">Query UI</a><a href="/api/metrics">JSON</a></nav>
+</header>
+<p class="sub">Every query against the service is logged to SQLite with per-stage latency,
+token usage, and real cost at Anthropic list prices. Auto-refreshes every 10&nbsp;s.</p>
+
+<div class="tiles" id="tiles"></div>
+
+<h2>Recent queries — per-stage latency</h2>
+<div class="legend">
+  <span><i style="background:var(--s1)"></i>guardrail</span>
+  <span><i style="background:var(--s2)"></i>retrieval</span>
+  <span><i style="background:var(--s3)"></i>generation</span>
+  <span><i style="background:var(--s5)"></i>verification</span>
+</div>
+<div class="card">
+  <table id="tbl">
+    <thead><tr>
+      <th>time (UTC)</th><th>question</th><th>pipe</th><th>stage breakdown</th>
+      <th class="num">total</th><th class="num">grounded</th><th class="num">tokens</th><th class="num">cost</th><th></th>
+    </tr></thead>
+    <tbody></tbody>
+  </table>
+  <div class="empty" id="empty" hidden>No queries logged yet — ask something on the <a href="/">query page</a>.</div>
+</div>
+<p class="foot" id="foot"></p>
+
+<script>
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const STAGES = [["guardrail","--s1"],["retrieval","--s2"],["generation","--s3"],["verification","--s5"]];
+
+function tile(k, v, u="") {
+  return `<div class="tile"><div class="k">${k}</div><div class="v">${v}<span class="u"> ${u}</span></div></div>`;
+}
+
+async function refresh() {
+  let m;
+  try { m = await (await fetch("/api/metrics")).json(); } catch { return; }
+  document.getElementById("tiles").innerHTML =
+    tile("queries", m.total_queries) +
+    tile("p50 latency", (m.latency_ms.p50/1000).toFixed(2), "s") +
+    tile("p95 latency", (m.latency_ms.p95/1000).toFixed(2), "s") +
+    tile("avg cost / query", "$" + m.cost_usd.avg_per_query.toFixed(4)) +
+    tile("total spend", "$" + m.cost_usd.total.toFixed(3)) +
+    tile("avg groundedness", m.avg_groundedness == null ? "—" : (m.avg_groundedness*100).toFixed(0) + "%") +
+    tile("blocked", m.blocked) + tile("abstained", m.abstained);
+
+  const rows = m.recent || [];
+  document.getElementById("empty").hidden = rows.length > 0;
+  document.querySelector("#tbl tbody").innerHTML = rows.map(rowHtml).join("");
+  document.getElementById("foot").textContent =
+    "Cost = tokens × Anthropic list price (claude-haiku-4-5: $1/M input, $5/M output). " +
+    "Updated " + new Date().toLocaleTimeString();
+}
+
+function rowHtml(r) {
+  const flags = [];
+  if (r.blocked) flags.push('<span class="flag blocked">blocked</span>');
+  if (r.abstained) flags.push('<span class="flag">abstained</span>');
+  if (r.retrieval_rounds > 1) flags.push('<span class="flag">re-retrieved</span>');
+  return `<tr>
+    <td>${esc((r.ts||"").replace("T"," ").replace("+00:00",""))}</td>
+    <td class="q" title="${esc(r.question)}">${esc(r.question)}</td>
+    <td>${esc(r.pipeline)}</td>
+    <td>${bar(r)}</td>
+    <td class="num">${(r.latency_ms/1000).toFixed(2)}s</td>
+    <td class="num">${r.groundedness == null ? "—" : (r.groundedness*100).toFixed(0) + "%"}</td>
+    <td class="num">${r.input_tokens}→${r.output_tokens}</td>
+    <td class="num">$${r.cost_usd.toFixed(4)}</td>
+    <td>${flags.join(" ")}</td>
+  </tr>`;
+}
+
+function bar(r) {
+  const t = r.timings || {};
+  const total = r.latency_ms || 1;
+  const parts = STAGES.map(([k, v]) => {
+    const ms = t[k] || 0;
+    return ms > 0 ? `<span style="width:${Math.max(2,(ms/total)*100)}%;background:var(${v})" title="${k}: ${(ms/1000).toFixed(2)}s"></span>` : "";
+  }).join("");
+  return `<div class="bar" title="total ${(total/1000).toFixed(2)}s">${parts}</div>`;
+}
+
+refresh();
+setInterval(refresh, 10000);
+</script>
+</body>
+</html>
