@@ -1,0 +1,8 @@
+# The Wikipedia corpus cache and lockfile are data/generated, not authored source.
+# Exclude them from GitHub's language stats and collapse them in diffs.
+data/corpus/** linguist-generated=true
+uv.lock linguist-generated=true
+
+# Ensure the app source is counted normally.
+*.py linguist-detectable=true
+static/*.html linguist-detectable=true
