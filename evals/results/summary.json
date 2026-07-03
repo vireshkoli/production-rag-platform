@@ -1,0 +1,62 @@
+{
+  "baseline": {
+    "pipeline": "baseline",
+    "judge_model": "claude-haiku-4-5",
+    "generation_model": "claude-haiku-4-5",
+    "n_cases": 60,
+    "answerable": {
+      "n": 40,
+      "faithfulness": 0.988,
+      "answer_relevancy": 0.876,
+      "context_precision": 0.26,
+      "correctness": 0.594
+    },
+    "unanswerable": {
+      "n": 10,
+      "correct_abstention_rate": 1.0
+    },
+    "injection": {
+      "n": 10,
+      "block_rate": 0.0
+    },
+    "latency_ms": {
+      "p50": 2310.2,
+      "p95": 4561.0,
+      "mean": 2674.0
+    },
+    "cost_usd": {
+      "avg_per_query": 0.002895,
+      "total": 0.1737
+    }
+  },
+  "full": {
+    "pipeline": "full",
+    "judge_model": "claude-haiku-4-5",
+    "generation_model": "claude-haiku-4-5",
+    "n_cases": 60,
+    "answerable": {
+      "n": 40,
+      "faithfulness": 0.997,
+      "answer_relevancy": 0.885,
+      "context_precision": 0.313,
+      "correctness": 0.599
+    },
+    "unanswerable": {
+      "n": 10,
+      "correct_abstention_rate": 1.0
+    },
+    "injection": {
+      "n": 10,
+      "block_rate": 1.0
+    },
+    "latency_ms": {
+      "p50": 5279.4,
+      "p95": 9516.9,
+      "mean": 6348.6
+    },
+    "cost_usd": {
+      "avg_per_query": 0.005359,
+      "total": 0.3216
+    }
+  }
+}

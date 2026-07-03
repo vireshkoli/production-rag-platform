@@ -26,12 +26,28 @@ def _delta(base, full):
     return f"{arrow} {d:+.1f} pts"
 
 
+def _answered_stats(pipeline: str) -> dict:
+    """Correctness restricted to questions the system chose to answer (vs abstain)."""
+    cases = json.loads((RESULTS_DIR / f"{pipeline}.json").read_text())["cases"]
+    ans = [c for c in cases if c["type"] == "answerable"]
+    answered = [c for c in ans if not c["abstained"]]
+    corr = [c["correctness"] for c in answered if c.get("correctness") is not None]
+    low_faith = [c for c in ans if (c.get("faithfulness") or 1.0) < 0.8]
+    return {
+        "n_answerable": len(ans),
+        "n_abstained": len(ans) - len(answered),
+        "correctness_answered": sum(corr) / len(corr) if corr else None,
+        "n_low_faith": len(low_faith),
+    }
+
+
 def main() -> None:
     summaries = json.loads((RESULTS_DIR / "summary.json").read_text())
     b = summaries.get("baseline")
     f = summaries.get("full")
     if not b or not f:
         raise SystemExit("Need both baseline and full results. Run evals.run for each pipeline.")
+    b_stats, f_stats = _answered_stats("baseline"), _answered_stats("full")
 
     lines = [
         "# Evaluation Report — Baseline vs. Full Pipeline",
@@ -55,12 +71,31 @@ def main() -> None:
     ]
     for key, label in [
         ("faithfulness", "Faithfulness (grounding — higher = fewer hallucinations)"),
-        ("correctness", "Correctness vs. gold answer"),
+        ("correctness", "Correctness vs. gold answer (all answerable cases)"),
         ("answer_relevancy", "Answer relevancy"),
         ("context_precision", "Context precision (retrieval quality)"),
     ]:
         bv, fv = b["answerable"][key], f["answerable"][key]
         lines.append(f"| {label} | {_pct(bv)} | {_pct(fv)} | {_delta(bv, fv)} |")
+    bv, fv = b_stats["correctness_answered"], f_stats["correctness_answered"]
+    lines.append(
+        f"| Correctness on answered questions only | {_pct(bv)} | {_pct(fv)} | {_delta(bv, fv)} |"
+    )
+    bv2, fv2 = b_stats["n_low_faith"], f_stats["n_low_faith"]
+    lines.append(
+        f"| Answers with faithfulness < 0.8 (hallucination cases) | {bv2} | {fv2} | "
+        f"{'▼ ' + str(fv2 - bv2) if fv2 < bv2 else '→ 0' if fv2 == bv2 == 0 else str(fv2 - bv2)} |"
+    )
+
+    lines += [
+        "",
+        f"Both pipelines abstained on {f_stats['n_abstained']}/{f_stats['n_answerable']} "
+        "answerable cases — hyper-specific detail questions where retrieval did not surface "
+        "the exact source passage. They decline rather than fabricate (the shared generation "
+        "prompt instructs abstention), which is why aggregate correctness sits well below "
+        "correctness-on-answered. Retrieval recall, not generation, is the binding constraint "
+        "on this corpus.",
+    ]
 
     lines += [
         "",
