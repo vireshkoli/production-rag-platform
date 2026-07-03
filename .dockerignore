@@ -1,0 +1,12 @@
+.git
+.venv
+data/qdrant
+*.sqlite3
+*.db
+.pytest_cache
+.ruff_cache
+__pycache__
+.env
+.github
+docs
+scripts

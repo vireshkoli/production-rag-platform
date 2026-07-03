@@ -6,10 +6,11 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# Data & runtime artifacts (rebuilt by `python -m rag.ingest`)
-data/
+# Runtime artifacts (rebuilt by `python -m rag.ingest`)
+data/qdrant/
 *.sqlite3
 *.db
+# data/corpus/ (the fetched Wikipedia cache) IS committed so builds are reproducible offline.
 
 # OS / editor
 .DS_Store
