@@ -13,7 +13,19 @@ from rag.config import settings
 from rag.llm import QueryBudgetExceeded
 from rag.pipeline import run_query
 
-STATIC_DIR = Path(__file__).resolve().parents[2] / "static"
+
+def _find_static_dir() -> Path:
+    candidates = (
+        Path(__file__).resolve().parents[2] / "static",  # editable install (src layout)
+        Path.cwd() / "static",  # site-packages install run from the app root (Docker)
+    )
+    for c in candidates:
+        if c.is_dir():
+            return c
+    return candidates[0]
+
+
+STATIC_DIR = _find_static_dir()
 
 
 @asynccontextmanager

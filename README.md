@@ -6,7 +6,10 @@ low-confidence answers and abstains rather than hallucinates, **prompt-injection
 guardrails**, and a **measured evaluation harness** proving the improvements — plus a live
 per-query cost/latency dashboard.
 
-**Live demo:** _deploy pending_ · **Evaluation report:** [`evals/REPORT.md`](evals/REPORT.md)
+**Live demo:** [vireshk-production-rag-platform.hf.space](https://vireshk-production-rag-platform.hf.space)
+(free CPU tier — a full-pipeline query takes a few seconds) ·
+**Live dashboard:** [/dashboard](https://vireshk-production-rag-platform.hf.space/dashboard) ·
+**Evaluation report:** [`evals/REPORT.md`](evals/REPORT.md)
 
 ---
 
