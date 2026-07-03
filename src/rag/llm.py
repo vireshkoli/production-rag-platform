@@ -4,8 +4,10 @@ Cost is computed from real usage (input/output tokens) at published list prices,
 dashboard and eval numbers reflect actual money spent.
 """
 
+import os
 from dataclasses import dataclass, field
 from functools import lru_cache
+from pathlib import Path
 
 # USD per 1M tokens (input, output) — Anthropic list prices
 PRICES: dict[str, tuple[float, float]] = {
@@ -59,10 +61,23 @@ def cost_usd(model: str, input_tokens: int, output_tokens: int) -> float:
     return (input_tokens * in_price + output_tokens * out_price) / 1_000_000
 
 
+def _load_env_file() -> None:
+    """Populate os.environ from ./.env (KEY=VALUE lines) without overriding real env vars."""
+    env_file = Path(".env")
+    if not env_file.exists():
+        return
+    for line in env_file.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            key, _, value = line.partition("=")
+            os.environ.setdefault(key.strip(), value.strip())
+
+
 @lru_cache
 def _client():
     import anthropic
 
+    _load_env_file()
     return anthropic.Anthropic()
 
 
